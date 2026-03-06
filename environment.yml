@@ -6,4 +6,4 @@ channels:
 
 dependencies:
   - python=3.8
-  - pandas
+  - pandasgit st
