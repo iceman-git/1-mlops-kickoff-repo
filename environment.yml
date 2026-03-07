@@ -5,5 +5,13 @@ channels:
   - defaults
 
 dependencies:
-  - python=3.8
-  - pandasgit st
+  - python>=3.9
+  - pandas
+  - numpy
+  - scikit-learn
+  - joblib
+  - jupyter
+  - ipykernel
+  - pytest
+  - pytest-cov
+  - pip
