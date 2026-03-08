@@ -1,10 +1,24 @@
-# MLOps Project Configuration
-# This file will eventually control paths, hyperparameters, and toggles.
-
 data:
-  raw: "data/raw/dataset.csv"
-  processed: "data/processed/clean.csv"
+  raw_path: "data/raw/Titanic-Dataset.csv"
+  processed_path: "data/processed/titanic_clean.csv"
+  file_type: "csv"
 
-train:
-  test_size: 0.2
-  seed: 42
+schema:
+  target: "Survived"
+  required_columns:
+    - PassengerId
+    - Survived
+    - Pclass
+    - Name
+    - Sex
+    - Age
+    - SibSp
+    - Parch
+    - Ticket
+    - Fare
+    - Cabin
+    - Embarked
+
+logging:
+  level: "INFO"
+  log_file: "data/reports/pipeline.log"
