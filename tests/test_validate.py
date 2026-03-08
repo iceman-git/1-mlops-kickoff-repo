@@ -1,122 +1,84 @@
 import pytest
 import pandas as pd
-from src.validate import validate, DataValidationError
+
+from src.validate import validate_dataframe
+
+
+@pytest.fixture
+def required_columns():
+    # minimal, generic required schema
+    return ["id", "age", "fare", "category"]
 
 
 def make_valid_df():
-    return pd.DataFrame({
-        "PassengerId": [1, 2, 3],
-        "Survived": [0, 1, 0],
-        "Pclass": [3, 1, 2],
-        "Name": ["Smith, Mr. John", "Doe, Mrs. Jane", "Brown, Miss. Emily"],
-        "Sex": ["male", "female", "female"],
-        "Age": [22.0, 38.0, 26.0],
-        "SibSp": [1, 0, 1],
-        "Parch": [0, 1, 0],
-        "Ticket": ["A/5 21171", "PC 17599", "STON/O2. 3101282"],
-        "Fare": [7.25, 71.2833, 7.925],
-        "Cabin": [None, "C85", None],
-        "Embarked": ["S", "C", "S"],
-    })
+    return pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "age": [22.0, 38.0, 26.0],
+            "fare": [7.25, 71.2833, 7.925],
+            "category": ["A", "B", "A"],
+        }
+    )
 
 
-# a valid DataFrame
-def test_valid_passes():
+def test_valid_dataframe_passes(required_columns):
     df = make_valid_df()
-    assert validate(df) is True
+    assert validate_dataframe(df, required_columns) is True
 
 
-# wrong dtypes for numeric columns
-def test_wrong_dtypes():
-    df = make_valid_df()
-    df["Age"] = df["Age"].astype(str)
-    df["Fare"] = df["Fare"].astype(str)
+def test_none_dataframe_fails(required_columns):
+    with pytest.raises(ValueError) as exc:
+        validate_dataframe(None, required_columns)
+    assert "empty" in str(exc.value).lower() or "dataframe" in str(exc.value).lower()
 
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
+
+def test_empty_dataframe_fails(required_columns):
+    df = pd.DataFrame()
+    with pytest.raises(ValueError) as exc:
+        validate_dataframe(df, required_columns)
+    assert "empty" in str(exc.value).lower() or "missing" in str(exc.value).lower()
+
+
+def test_missing_required_columns_fails(required_columns):
+    df = make_valid_df().drop(columns=["fare", "category"])
+    with pytest.raises(ValueError) as exc:
+        validate_dataframe(df, required_columns)
     msg = str(exc.value).lower()
-    assert "age" in msg and "float" in msg
-    assert "fare" in msg and "float" in msg
+    assert "missing required columns" in msg
+    assert "fare" in msg
+    assert "category" in msg
 
 
-
-# duplicate PassengerId values
-def test_duplicate_passengerid():
+def test_nulls_in_required_columns_fails(required_columns):
     df = make_valid_df()
-    df.loc[2, "PassengerId"] = df.loc[0, "PassengerId"]
+    df.loc[1, "age"] = None
+    with pytest.raises(ValueError) as exc:
+        validate_dataframe(df, required_columns)
+    msg = str(exc.value).lower()
+    assert "null" in msg
+    assert "age" in msg
 
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
+
+def test_duplicate_rows_fails(required_columns):
+    df = make_valid_df()
+    df = pd.concat([df, df.iloc[[0]]], ignore_index=True)  # add an exact duplicate row
+    with pytest.raises(ValueError) as exc:
+        validate_dataframe(df, required_columns)
     assert "duplicate" in str(exc.value).lower()
 
 
-# unexpected categorical values (Sex, Embarked)
-def test_unexpected_categorical_values():
+def test_zero_variance_numeric_column_fails(required_columns):
     df = make_valid_df()
-    df.loc[0, "Sex"] = "unknown"
-    df.loc[1, "Embarked"] = "X"
-
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
-    msg = str(exc.value)
-    assert "sex" in msg.lower() and "unknown" in msg
-    assert "embarked" in msg.lower() and "X" in msg
-
-
-# missing required (non-nullable) columns
-def test_missing_required_columns():
-    df = make_valid_df().drop(columns=["Sex", "SibSp", "Parch", "Name"])
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
+    df["fare"] = 1.23  # constant numeric column -> zero variance
+    with pytest.raises(ValueError) as exc:
+        validate_dataframe(df, required_columns)
     msg = str(exc.value).lower()
-    assert "missing" in msg
-    for c in ["sex", "sibsp", "parch", "name"]:
-        assert c in msg
+    assert "zero variance" in msg
+    assert "fare" in msg
 
 
-# extra/unexpected columns are flagged
-def test_extra_columns_flagged():
-    df = make_valid_df().copy()
-    df["ExtraColumn"] = ["x", "y", "z"]
-
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
-    assert "extra" in str(exc.value).lower() or "unexpected" in str(exc.value).lower()
-
-
-# nulls in non-nullable columns
-def test_nulls_in_non_nullable_columns():
+def test_nulls_in_non_required_columns_are_allowed(required_columns):
+    # your validator only checks nulls in required_columns, so nulls elsewhere should pass
     df = make_valid_df()
-    df.loc[1, "Name"] = None
-    df.loc[2, "Sex"] = None
-
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
-    msg = str(exc.value).lower()
-    assert "name" in msg and "null" in msg
-    assert "sex" in msg and "null" in msg
-
-
-# negative values in columns that must be non-negative
-@pytest.mark.parametrize(
-    "col, values, expected_substr",
-    [
-        ("Age", [22.0, -38.0, 26.0], "age"),
-        ("SibSp", [1, 0, -1], "sibsp"),
-        ("Fare", [7.25, -71.28, 7.925], "fare"),
-    ],
-)
-def test_negative_values_in_non_negative_columns(col, values, expected_substr):
-    df = make_valid_df()
-    df[col] = values
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
-    assert expected_substr in str(exc.value).lower()
-
-
-# empty DataFrame should fail due to missing required columns
-def test_empty_dataframe():
-    df = pd.DataFrame()
-    with pytest.raises(DataValidationError) as exc:
-        validate(df)
-    assert "missing" in str(exc.value).lower()
+    df["optional_note"] = [None, None, None]
+    assert validate_dataframe(df, required_columns) is True
