@@ -1,171 +1,100 @@
-import json
+"""
+Educational Goal:
+- Why this module exists in an MLOps system: Provide automated proof that the pipeline runs end-to-end and produces required artifacts.
+- Responsibility (separation of concerns): Validate orchestration behavior (paths, artifacts, and minimal schema contracts).
+- Pipeline contract (inputs and outputs): Running src.main.main() must materialize clean.csv, model.joblib, and predictions.csv.
+
+TODO: Replace print statements with standard library logging in a later session
+TODO: Any temporary or hardcoded variable or parameter will be imported from config.yml in a later session
+"""
+
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 
-def _minimal_cfg(tmp_path: Path) -> dict:
-    """Return a minimal config dict that satisfies main.py validation."""
-    return {
-        "data": {"target": "target"},
-        "split": {"test_size": 0.2, "val_size": 0.25, "random_state": 123, "stratify": False},
-        "artifacts": {"dir": str(tmp_path / "artifacts")},
-        "logging": {"level": "INFO", "dir": str(tmp_path / "logs"), "file": "main.log"},
-    }
-
-
-def test_run_pipeline_happy_path_writes_artifacts(tmp_path, monkeypatch):
+def test_pipeline_end_to_end_regression(tmp_path, monkeypatch):
     """
-    Validates that main.py orchestrates:
-      load -> clean -> validate -> split -> features -> train -> evaluate -> infer
-    and writes artifacts: validation_report.json, metrics.json, predictions.csv.
+    Inputs:
+    - tmp_path: pytest-provided temporary directory.
+    - monkeypatch: pytest fixture used to change working directory safely.
+    Outputs:
+    - None (asserts pipeline artifacts and contracts).
+    Why this contract matters for reliable ML delivery:
+    - A green end-to-end test is the fastest way to detect breaking refactors before they hit production.
     """
-    from src import main as main_mod
-    from src import load_data, clean_data, validate, features, train, evaluate, infer
+    print("[tests] Running end-to-end regression pipeline test in isolated temp directory.")  # TODO: replace with logging later
 
-    cfg = _minimal_cfg(tmp_path)
-    main_mod.validate_config(cfg)
+    # Run the pipeline in an isolated working directory so it writes artifacts under tmp_path/
+    monkeypatch.chdir(tmp_path)
 
-    # --- Arrange: stub out module functions ---
-    call_order = []
+    # Import inside the test so it uses the current working directory for relative paths.
+    import src.main as main_mod
 
-    # Load returns a DataFrame with a target column
-    def fake_load(cfg_in, logger=None):
-        call_order.append("load")
-        return pd.DataFrame(
-            {
-                "f1": [1, 2, 3, 4, 5],
-                "f2": [10, 20, 30, 40, 50],
-                "target": [0, 1, 0, 1, 0],
-            }
-        )
+    # TODO_STUDENT:
+    # - Add more assertions here as your pipeline grows (e.g., schema checks, metric thresholds).
+    # - Keep this test fast; heavy tests belong in separate suites.
+    main_mod.main()
 
-    def fake_clean(df, cfg_in, logger=None):
-        call_order.append("clean")
-        # pretend cleaning doesn't drop rows
-        return df.copy()
+    clean_path = Path("data/processed/clean.csv")
+    model_path = Path("models/model.joblib")
+    preds_path = Path("reports/predictions.csv")
 
-    def fake_validate(df, cfg_in, logger=None):
-        call_order.append("validate")
-        return {"ok": True, "n_rows": int(df.shape[0]), "n_cols": int(df.shape[1])}
+    assert clean_path.exists(), "Expected artifact missing: data/processed/clean.csv"
+    assert model_path.exists(), "Expected artifact missing: models/model.joblib"
+    assert preds_path.exists(), "Expected artifact missing: reports/predictions.csv"
 
-    # Features returns an "unfitted recipe" object (can be anything, main passes it through)
-    class DummyPreprocessor:
-        pass
-
-    def fake_features(X_train, cfg_in, logger=None):
-        call_order.append("features")
-        assert "target" not in X_train.columns  # target should have been separated before features
-        return DummyPreprocessor()
-
-    # Train returns a model with predict()
-    class DummyModel:
-        def predict(self, X):
-            # simple deterministic output
-            return [0] * len(X)
-
-    def fake_train(X_train, y_train, preprocessor, cfg_in, logger=None):
-        call_order.append("train")
-        assert isinstance(preprocessor, DummyPreprocessor)
-        assert len(X_train) == len(y_train)
-        return {"model": DummyModel(), "model_path": str(tmp_path / "artifacts" / "dummy_model.pkl")}
-
-    def fake_evaluate(model, X_val, y_val, cfg_in, logger=None):
-        call_order.append("evaluate")
-        assert hasattr(model, "predict")
-        # return metrics dict
-        return {"accuracy": 0.5}
-
-    def fake_infer(model, X_test, cfg_in, logger=None):
-        call_order.append("infer")
-        return model.predict(X_test)
-
-    # Monkeypatch onto the imported src.* modules
-    monkeypatch.setattr(load_data, "load_data", fake_load, raising=False)
-    monkeypatch.setattr(clean_data, "clean_data", fake_clean, raising=False)
-    monkeypatch.setattr(validate, "validate_dataframe", fake_validate, raising=False)
-    monkeypatch.setattr(features, "build_preprocessor", fake_features, raising=False)
-    monkeypatch.setattr(train, "train_model", fake_train, raising=False)
-    monkeypatch.setattr(evaluate, "evaluate_model", fake_evaluate, raising=False)
-    monkeypatch.setattr(infer, "predict", fake_infer, raising=False)
-
-    # Use a simple logger to avoid writing logs during test
-    import logging
-    logger = logging.getLogger("test-logger")
-    logger.handlers.clear()
-    logger.addHandler(logging.NullHandler())
-    logger.setLevel(logging.INFO)
-
-    # --- Act ---
-    run_id = "testrun"
-    summary = main_mod.run_pipeline(cfg, logger, run_id)
-
-    # --- Assert: step order and summary keys ---
-    assert call_order == ["load", "clean", "validate", "features", "train", "evaluate", "infer"]
-
-    assert summary["run_id"] == run_id
-    assert "metrics" in summary
-    assert summary["metrics"]["accuracy"] == 0.5
-
-    art_dir = Path(cfg["artifacts"]["dir"])
-    validation_path = art_dir / f"{run_id}__validation_report.json"
-    metrics_path = art_dir / f"{run_id}__metrics.json"
-    preds_path = art_dir / f"{run_id}__predictions.csv"
-
-    assert validation_path.exists()
-    assert metrics_path.exists()
-    assert preds_path.exists()
-
-    # Validate artifacts content
-    with validation_path.open("r", encoding="utf-8") as f:
-        report = json.load(f)
-    assert report["ok"] is True
-
-    with metrics_path.open("r", encoding="utf-8") as f:
-        metrics = json.load(f)
-    assert metrics["accuracy"] == 0.5
-
-    preds_df = pd.read_csv(preds_path)
-    assert "prediction" in preds_df.columns
-    assert len(preds_df) > 0
+    df_preds = pd.read_csv(preds_path)
+    assert list(df_preds.columns) == ["prediction"], "predictions.csv must have exactly one column named 'prediction'"
+    assert len(df_preds) > 0, "predictions.csv should contain at least one prediction row"
 
 
-def test_run_pipeline_raises_if_target_missing(tmp_path, monkeypatch):
-    """If the cleaned dataframe lacks the target column, main.py should fail fast."""
-    from src import main as main_mod
-    from src import load_data, clean_data, validate, features, train, evaluate, infer
+def test_pipeline_end_to_end_classification(tmp_path, monkeypatch):
+    """
+    Inputs:
+    - tmp_path: pytest-provided temporary directory.
+    - monkeypatch: pytest fixture used to change working directory safely.
+    Outputs:
+    - None (asserts pipeline runs for classification too).
+    Why this contract matters for reliable ML delivery:
+    - Ensures the same scaffolding supports both regression and classification paths without refactors breaking one mode.
+    """
+    print("[tests] Running end-to-end classification pipeline test in isolated temp directory.")  # TODO: replace with logging later
 
-    cfg = _minimal_cfg(tmp_path)
-    main_mod.validate_config(cfg)
+    monkeypatch.chdir(tmp_path)
 
-    def fake_load(cfg_in, logger=None):
-        return pd.DataFrame({"f1": [1, 2, 3], "f2": [10, 20, 30], "target": [0, 1, 0]})
+    # Prepare a tiny classification dataset at the expected raw path so the run is deterministic.
+    raw_path = Path("data/raw/example.csv")
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Cleaning step drops the target (bug)
-    def fake_clean(df, cfg_in, logger=None):
-        return df.drop(columns=["target"])
+    df_cls = pd.DataFrame(
+        {
+            "num_feature": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            "cat_feature": ["A", "B", "A", "B", "C", "C"],
+            "target": [0, 1, 0, 1, 0, 1],  # binary labels
+        }
+    )
+    df_cls.to_csv(raw_path, index=False)
 
-    def fake_validate(df, cfg_in, logger=None):
-        return {"ok": True}
+    import src.main as main_mod
 
-    # Stub the remaining functions (won't be reached, but keep imports safe)
-    monkeypatch.setattr(load_data, "load_data", fake_load, raising=False)
-    monkeypatch.setattr(clean_data, "clean_data", fake_clean, raising=False)
-    monkeypatch.setattr(validate, "validate_dataframe", fake_validate, raising=False)
-    monkeypatch.setattr(features, "build_preprocessor", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(train, "train_model", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(evaluate, "evaluate_model", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(infer, "predict", lambda *a, **k: None, raising=False)
+    # Temporarily switch SETTINGS to classification, then restore afterwards.
+    original_settings = {k: v for k, v in main_mod.SETTINGS.items()}
+    try:
+        main_mod.SETTINGS["problem_type"] = "classification"
+        main_mod.SETTINGS["is_example_config"] = True  # keep example mode on for scaffolding
 
-    import logging
-    logger = logging.getLogger("test-logger-2")
-    logger.handlers.clear()
-    logger.addHandler(logging.NullHandler())
-    logger.setLevel(logging.INFO)
+        # TODO_STUDENT:
+        # - Consider adding multi-class labels here once your real use case requires it.
+        main_mod.main()
+    finally:
+        # Restore SETTINGS to avoid cross-test contamination.
+        main_mod.SETTINGS.clear()
+        main_mod.SETTINGS.update(original_settings)
 
-    with pytest.raises(Exception) as excinfo:
-        main_mod.run_pipeline(cfg, logger, run_id="testrun")
+    preds_path = Path("reports/predictions.csv")
+    assert preds_path.exists(), "Expected artifact missing: reports/predictions.csv"
 
-    # We don't match exact message to keep it resilient, but ensure it's clearly a pipeline failure
-    assert "Target" in str(excinfo.value) or "target" in str(excinfo.value)
+    df_preds = pd.read_csv(preds_path)
+    assert list(df_preds.columns) == ["prediction"], "predictions.csv must have exactly one column named 'prediction'"
+    assert len(df_preds) > 0, "predictions.csv should contain at least one prediction row"

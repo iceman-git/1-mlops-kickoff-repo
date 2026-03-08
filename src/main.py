@@ -220,6 +220,7 @@ def main():
     save_csv(df_preds, preds_path)
 
     print("[main.main] Pipeline completed successfully.")  # TODO: replace with logging later
+    print(">>> TEST MARKER: main() executed")
 
 
 if __name__ == "__main__":
