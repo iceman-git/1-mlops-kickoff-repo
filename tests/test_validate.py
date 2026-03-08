@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from src.data_validation import validate, DataValidationError
+from src.validate import validate, DataValidationError
 
 
 def make_valid_df():
