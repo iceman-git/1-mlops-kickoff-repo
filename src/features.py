@@ -6,73 +6,116 @@ Input: Configuration (lists of column names).
 Output: scikit-learn ColumnTransformer object.
 """
 
-from typing import Optional
-import pandas as pd
-import re
-from sklearn.preprocessing import FunctionTransformer
+"""
+Educational Goal:
+- Why this module exists in an MLOps system: Define feature transformations as a reusable, leak-safe recipe.
+- Responsibility (separation of concerns): Feature specification lives separately from model training and evaluation.
+- Pipeline contract (inputs and outputs): Input = lists of column names + params, Output = an unfitted ColumnTransformer.
 
-def _extract_title_series(name_series: pd.Series) -> pd.Series:
-    def _extract(name):
-        if pd.isna(name):
-            return "Unknown"
-        m = re.search(r",\s*(.*?)\.", str(name))
-        return m.group(1).strip() if m else "Unknown"
-    return name_series.apply(_extract)
+TODO: Replace print statements with standard library logging in a later session
+TODO: Any temporary or hardcoded variable or parameter will be imported from config.yml in a later session
+"""
 
-def _feature_adder(df: pd.DataFrame) -> pd.DataFrame:
+from typing import List, Optional
+
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import KBinsDiscretizer, OneHotEncoder
+
+
+def _dedupe_preserve_order(cols: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for c in cols:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+def get_feature_preprocessor(
+    quantile_bin_cols: Optional[List[str]] = None,
+    categorical_onehot_cols: Optional[List[str]] = None,
+    numeric_passthrough_cols: Optional[List[str]] = None,
+    n_bins: int = 3,
+    remainder: str = "drop",
+) -> ColumnTransformer:
     """
-    Adds:
-      - FamilySize = SibSp + Parch + 1
-      - Title extracted from Name (rare titles grouped as 'Other')
-    Safe behavior:
-      - If SibSp/Parch missing -> treated as 0
-      - If Name missing -> Title = 'Unknown'
-      - Ensures categorical columns are strings for OneHotEncoder
+    Inputs:
+    - quantile_bin_cols: Numeric columns to discretize into quantile bins.
+    - categorical_onehot_cols: Categorical columns to one-hot encode.
+    - numeric_passthrough_cols: Numeric columns to pass through unchanged.
+    - n_bins: Number of bins for KBinsDiscretizer.
+    - remainder: What to do with unspecified columns ("drop" or "passthrough").
+
+    Outputs:
+    - preprocessor: A scikit-learn ColumnTransformer (NOT fitted).
+
+    Why this contract matters:
+    - Keeping preprocessing inside the Pipeline prevents training/serving skew and leakage.
     """
-    df = df.copy()
 
-    # Ensure sibling/parent columns exist
-    if "SibSp" not in df.columns:
-        df["SibSp"] = 0
-    if "Parch" not in df.columns:
-        df["Parch"] = 0
+    print("[features.get_feature_preprocessor] Building ColumnTransformer feature recipe")
 
-    df["FamilySize"] = df["SibSp"].fillna(0).astype(int) + df["Parch"].fillna(0).astype(int) + 1
+    quantile_bin_cols = _dedupe_preserve_order(quantile_bin_cols or [])
+    categorical_onehot_cols = _dedupe_preserve_order(categorical_onehot_cols or [])
+    numeric_passthrough_cols = _dedupe_preserve_order(numeric_passthrough_cols or [])
 
-    # Title extraction and normalization (preserve Unknown, map uncommon -> 'Other')
-    common_titles = {
-        "Mr", "Mrs", "Miss", "Master", "Dr", "Rev", "Ms", "Mlle", "Mme",
-        "Major", "Col", "Capt", "Sir", "Lady", "Don", "Countess", "Jonkheer", "Dona"
-    }
+    if n_bins < 2:
+        raise ValueError("n_bins must be >= 2 for discretization to be meaningful.")
 
-    if "Name" in df.columns:
-        titles = _extract_title_series(df["Name"])
-        # normalize synonyms
-        titles = titles.replace({"Mlle": "Miss", "Ms": "Miss", "Mme": "Mrs"})
-        # keep explicit Unknown
-        is_unknown = titles == "Unknown"
-        # map anything not in the whitelist to "Other"
-        titles = titles.where(titles.isin(common_titles), other="Other")
-        titles[is_unknown] = "Unknown"
-        df["Title"] = titles
-    else:
-        df["Title"] = pd.Series(["Unknown"] * len(df), index=df.index)
+    # Guardrail: no column may appear in more than one group.
+    all_cols = quantile_bin_cols + categorical_onehot_cols + numeric_passthrough_cols
+    if len(all_cols) != len(set(all_cols)):
+        # Find overlaps for a helpful error message
+        overlaps = []
+        for c in set(all_cols):
+            count = (c in quantile_bin_cols) + (c in categorical_onehot_cols) + (c in numeric_passthrough_cols)
+            if count > 1:
+                overlaps.append(c)
+        raise ValueError(
+            f"Feature spec invalid: columns appear in multiple transformer lists: {sorted(overlaps)}"
+        )
 
-    # Ensure categorical columns exist and are object dtype (not stringified 'nan')
-    for c in ("Sex", "Embarked"):
-        if c in df.columns:
-            df[c] = df[c].astype(object)
-        else:
-            df[c] = pd.Series([None] * len(df), index=df.index, dtype=object)
+    # Guardrail: if user specifies nothing, fail fast with an actionable message.
+    if not (quantile_bin_cols or categorical_onehot_cols or numeric_passthrough_cols) and remainder == "drop":
+        raise ValueError(
+            "Feature spec invalid: no feature columns were provided and remainder='drop' would drop all features. "
+            "Provide at least one column list or set remainder='passthrough'."
+        )
 
-    # Title already created above; make it object dtype but keep actual values (including 'Unknown'/'Other')
-    df["Title"] = df["Title"].astype(object)
+    num_binner = KBinsDiscretizer(
+        n_bins=n_bins,
+        encode="onehot-dense",
+        strategy="quantile",
+        quantile_method="linear",
+    )
 
-    return df
+    # Support older scikit-learn versions:
+    try:
+        ohe = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    except TypeError:
+        ohe = OneHotEncoder(handle_unknown="ignore", sparse=False)
 
-# sklearn-compatible transformer to insert as the first step of a Pipeline
-FeatureAdder = FunctionTransformer(func=_feature_adder, validate=False)
+    transformers = []
 
-def get_feature_adder():
-    """Return a transformer that adds FamilySize and Title to a DataFrame."""
-    return FeatureAdder
+    if quantile_bin_cols:
+        transformers.append(("quantile_bin", num_binner, quantile_bin_cols))
+    if categorical_onehot_cols:
+        transformers.append(("categorical_onehot", ohe, categorical_onehot_cols))
+    if numeric_passthrough_cols:
+        transformers.append(("numeric_passthrough", "passthrough", numeric_passthrough_cols))
+
+    print(
+        "[features.get_feature_preprocessor] "
+        f"quantile_bin_cols={quantile_bin_cols}, "
+        f"categorical_onehot_cols={categorical_onehot_cols}, "
+        f"numeric_passthrough_cols={numeric_passthrough_cols}, remainder={remainder}"
+    )
+
+    preprocessor = ColumnTransformer(
+        transformers=transformers,
+        remainder=remainder,
+        verbose_feature_names_out=True,  # makes feature names traceable in debugging
+    )
+
+    return preprocessor
