@@ -17,6 +17,7 @@ from typing import Any, Dict
 import os
 import json
 import pandas as pd
+import numpy as np
 from sklearn.metrics import (
     f1_score,
     precision_score,
@@ -81,7 +82,8 @@ def evaluate_model(
         metrics["f1"] = f1_score(y, y_pred, zero_division=0)
 
     elif problem_type == "regression":
-        rmse = mean_squared_error(y, y_pred, squared=False)
+        mse = mean_squared_error(y, y_pred)
+        rmse = float(np.sqrt(mse))
         metrics["rmse"] = rmse
 
     else:
