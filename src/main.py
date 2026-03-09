@@ -14,11 +14,11 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from sklearn.model_selection import train_test_split
 
-from src.clean_data import clean_dataframe
+from src.clean_data import clean_data
 from src.evaluate import evaluate_model
 from src.features import get_feature_preprocessor
 from src.infer import run_inference
-from src.load_data import load_raw_data
+from src.load_data import load_data
 from src.train import train_model
 from src.utils import save_csv, save_model
 from src.validate import validate_dataframe
@@ -87,13 +87,33 @@ def main():
     # 2) Load raw data (creates dummy CSV if missing)
     # ------------------------------------------------------------
     raw_path = Path(SETTINGS["paths"]["raw_data"])
-    df_raw = load_raw_data(raw_path)
+    
+    # load_data expects a config dict
+    data_config = {
+        "data": {"raw_path": str(raw_path)},
+        "logging": {"log_file": "reports/run.log", "level": "INFO"}
+    }
+    df_raw = load_data(data_config)
 
     # ------------------------------------------------------------
     # 3) Clean
     # ------------------------------------------------------------
     target_column = SETTINGS["target_column"]
-    df_clean = clean_dataframe(df_raw, target_column=target_column)
+    
+    # clean_data expects a config dict
+    clean_config = {
+        "logging": {"log_file": "reports/run.log", "level": "INFO"},
+        "schema": {
+            "required_columns": (
+                SETTINGS["features"]["quantile_bin"]
+                + SETTINGS["features"]["categorical_onehot"]
+                + SETTINGS["features"]["numeric_passthrough"]
+                + [target_column]
+            ),
+            "target": target_column
+        }
+    }
+    df_clean = clean_data(df_raw, clean_config)
 
     # ------------------------------------------------------------
     # 4) Save processed clean CSV (required artifact)
@@ -180,11 +200,17 @@ def main():
     # ------------------------------------------------------------
     # 9) Train model pipeline (fit on training split only)
     # ------------------------------------------------------------
+    train_config = {
+        "model_name": "logistic_regression" if SETTINGS["problem_type"] == "classification" else "linear_regression",
+        "random_state": SETTINGS["random_state"],
+        "model_output_path": SETTINGS["paths"]["model"]
+    }
+
     model = train_model(
         X_train=X_train,
         y_train=y_train,
         preprocessor=preprocessor,
-        problem_type=SETTINGS["problem_type"],
+        config=train_config,
     )
 
     # ------------------------------------------------------------
@@ -196,12 +222,20 @@ def main():
     # ------------------------------------------------------------
     # 11) Evaluate on held-out test (prints metric only)
     # ------------------------------------------------------------
-    metric_value = evaluate_model(
+    eval_config = {
+        "problem_type": SETTINGS["problem_type"],
+        "primary_metric": "rmse" if SETTINGS["problem_type"] == "regression" else "f1",
+        "save_reports": False
+    }
+
+    metrics = evaluate_model(
         model=model,
-        X_test=X_test,
-        y_test=y_test,
-        problem_type=SETTINGS["problem_type"],
+        X=X_test,
+        y=y_test,
+        config=eval_config,
     )
+
+    metric_value = metrics.get(eval_config["primary_metric"])
 
     if SETTINGS["problem_type"] == "regression":
         print(f"[main.main] Test RMSE: {metric_value:.4f}")  # TODO: replace with logging later

@@ -29,26 +29,33 @@ def clean_data(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
     df = df.drop_duplicates()
 
-    df["Sex"] = df["Sex"].astype(str).str.lower().str.strip()
-    df["Embarked"] = df["Embarked"].astype("string").str.upper().str.strip()
+    if "Sex" in df.columns:
+        df["Sex"] = df["Sex"].astype(str).str.lower().str.strip()
+    
+    if "Embarked" in df.columns:
+        df["Embarked"] = df["Embarked"].astype("string").str.upper().str.strip()
+        if df["Embarked"].isna().any():
+            df["Embarked"] = df["Embarked"].fillna(df["Embarked"].mode()[0])
 
-    if df["Embarked"].isna().any():
-        df["Embarked"] = df["Embarked"].fillna(df["Embarked"].mode()[0])
+    if "Age" in df.columns:
+        global_median = df["Age"].median()
+        medians = df.groupby(["Sex", "Pclass"])["Age"].median() if "Sex" in df.columns and "Pclass" in df.columns else None
 
-    global_median = df["Age"].median()
-    medians = df.groupby(["Sex", "Pclass"])["Age"].median()
+        def fill_age(row):
+            if pd.notna(row["Age"]):
+                return row["Age"]
+            if medians is not None:
+                key = (row.get("Sex"), row.get("Pclass"))
+                value = medians.get(key, np.nan)
+            else:
+                value = np.nan
+            return global_median if pd.isna(value) else value
 
-    def fill_age(row):
-        if pd.notna(row["Age"]):
-            return row["Age"]
-        key = (row["Sex"], row["Pclass"])
-        value = medians.get(key, np.nan)
-        return global_median if pd.isna(value) else value
+        df["Age"] = df.apply(fill_age, axis=1)
 
-    df["Age"] = df.apply(fill_age, axis=1)
-
-    df["Fare"] = pd.to_numeric(df["Fare"], errors="coerce")
-    df["Fare"] = df["Fare"].fillna(df["Fare"].median())
+    if "Fare" in df.columns:
+        df["Fare"] = pd.to_numeric(df["Fare"], errors="coerce")
+        df["Fare"] = df["Fare"].fillna(df["Fare"].median())
 
     df = df.reset_index(drop=True)
 

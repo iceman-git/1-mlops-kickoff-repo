@@ -81,8 +81,9 @@ def evaluate_model(
         metrics["f1"] = f1_score(y, y_pred, zero_division=0)
 
     elif problem_type == "regression":
-        rmse = mean_squared_error(y, y_pred, squared=False)
-        metrics["rmse"] = rmse
+        # Calculate RMSE manually using mse because squared=False is not supported in recent sklearn versions
+        mse = mean_squared_error(y, y_pred)
+        metrics["rmse"] = mse ** 0.5
 
     else:
         raise ValueError(f"Unsupported problem_type: {problem_type}")
