@@ -1,3 +1,18 @@
+"""
+Test suite for src/infer.py
+
+What we are testing:
+    run_inference() has a strict output contract — a single-column DataFrame
+    named "prediction" whose index exactly matches the input. These tests
+    verify every clause of that contract independently so that any future
+    change to infer.py that breaks the contract fails loudly here, rather
+    than silently producing wrong predictions downstream.
+
+How to run:
+    From the repository root:
+        pytest tests/test_infer.py -v
+"""
+
 import pandas as pd
 import pytest
 from sklearn.compose import ColumnTransformer
@@ -76,15 +91,16 @@ def test_output_is_dataframe(fitted_model, sample_X_infer):
     )
 
 
-def test_output_has_single_prediction_column(fitted_model, sample_X_infer):
+def test_output_has_required_columns(fitted_model, sample_X_infer):
     """
-    The contract requires exactly one column named 'prediction'.
-    Any rename or accidental extra column (e.g. appending input features)
-    breaks downstream joins and saved CSV schemas.
+    The contract requires exactly four columns in a specific order.
+    Any rename, missing column, or accidental extra column (e.g. appending
+    input features) breaks downstream joins and saved CSV schemas.
     """
     result = run_inference(fitted_model, sample_X_infer)
-    assert list(result.columns) == ["prediction"], (
-        f"Expected columns ['prediction'], got {list(result.columns)}"
+    expected_cols = ["prediction", "survival_probability", "outcome", "high_confidence"]
+    assert list(result.columns) == expected_cols, (
+        f"Expected columns {expected_cols}, got {list(result.columns)}"
     )
 
 
@@ -124,4 +140,60 @@ def test_predictions_are_binary(fitted_model, sample_X_infer):
     assert not unexpected, (
         f"Unexpected prediction values found: {unexpected}. "
         f"All values must be 0 or 1."
+    )
+
+
+def test_survival_probability_is_valid_range(fitted_model, sample_X_infer):
+    """
+    Survival probabilities must be between 0.0 and 1.0 inclusive.
+    Values outside this range indicate a bug in predict_proba() extraction
+    or a downstream transformation that corrupted the probabilities.
+    """
+    result = run_inference(fitted_model, sample_X_infer)
+    assert result["survival_probability"].between(0.0, 1.0).all(), (
+        "All survival_probability values must be between 0.0 and 1.0"
+    )
+
+
+def test_outcome_labels_are_valid(fitted_model, sample_X_infer):
+    """
+    The outcome column must contain only the two expected string labels.
+    Any other value means the prediction-to-label mapping broke.
+    """
+    result = run_inference(fitted_model, sample_X_infer)
+    valid_labels = {"Survived", "Did not survive"}
+    unexpected = set(result["outcome"].unique()) - valid_labels
+    assert not unexpected, (
+        f"Unexpected outcome labels: {unexpected}. "
+        f"Must be one of {valid_labels}"
+    )
+
+
+def test_outcome_label_matches_prediction(fitted_model, sample_X_infer):
+    """
+    The outcome string label must be consistent with the binary prediction.
+    A passenger with prediction=1 must have outcome='Survived' and vice versa.
+    Mismatches would silently give stakeholders the wrong readable result.
+    """
+    result = run_inference(fitted_model, sample_X_infer)
+    for _, row in result.iterrows():
+        if row["prediction"] == 1:
+            assert row["outcome"] == "Survived", (
+                f"prediction=1 but outcome='{row['outcome']}'"
+            )
+        else:
+            assert row["outcome"] == "Did not survive", (
+                f"prediction=0 but outcome='{row['outcome']}'"
+            )
+
+
+def test_high_confidence_flag_is_boolean(fitted_model, sample_X_infer):
+    """
+    The high_confidence column must be boolean dtype.
+    A non-boolean type (e.g. int or object) would break downstream
+    filtering logic that checks `if row['high_confidence']`.
+    """
+    result = run_inference(fitted_model, sample_X_infer)
+    assert result["high_confidence"].dtype == bool, (
+        f"high_confidence must be bool dtype, got {result['high_confidence'].dtype}"
     )
