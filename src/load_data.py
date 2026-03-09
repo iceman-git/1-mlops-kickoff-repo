@@ -2,9 +2,13 @@ from pathlib import Path
 import pandas as pd
 from src.utils import read_config, setup_logger
 
-def load_data(config: dict) -> pd.DataFrame:
-    raw_path = Path(config["data"]["raw_path"])
-    logger = setup_logger(config["logging"]["log_file"], config["logging"]["level"])
+def load_data(config) -> pd.DataFrame:
+    if isinstance(config, dict):
+        raw_path = Path(config["data"]["raw_path"])
+        logger = setup_logger(config["logging"]["log_file"], config["logging"]["level"])
+    else:
+        raw_path = Path(config)
+        logger = setup_logger("reports/run.log", "INFO")
 
     if not raw_path.exists():
         logger.error("Raw file not found: %s", raw_path)
