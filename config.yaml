@@ -21,4 +21,4 @@ schema:
 
 logging:
   level: "INFO"
-  log_file: "data/reports/pipeline.log"
+  log_file: "reports/pipeline.log"
