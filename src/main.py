@@ -9,6 +9,7 @@ TODO: Any temporary or hardcoded variable or parameter will be imported from con
 """
 
 from pathlib import Path
+from src.utils import read_config
 
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
@@ -29,22 +30,24 @@ from src.validate import validate_dataframe
 # LOUD REMINDER:
 # - This SETTINGS block is PRE-CONFIGURED to match the dummy CSV created by src/load_data.py.
 # - Students MUST map these keys to the real dataset schema (columns, target, problem type, etc.).
+CONFIG = read_config("config.yaml")
+
 SETTINGS = {
-    "is_example_config": True,
-    "problem_type": "regression",  # "regression" or "classification"
+    "is_example_config": False,
+    "problem_type": "classification",  # Titanic = classification
     "random_state": 42,
     "test_size": 0.25,
     "paths": {
-        "raw_data": "data/raw/example.csv",
-        "processed_clean": "data/processed/clean.csv",
+        "raw_data": CONFIG["data"]["raw_path"],
+        "processed_clean": CONFIG["data"]["processed_path"],
         "model": "models/model.joblib",
         "predictions_report": "reports/predictions.csv",
     },
-    "target_column": "target",
+    "target_column": CONFIG["schema"]["target"],
     "features": {
-        "quantile_bin": ["num_feature"],          # numeric cols to quantile-bin
-        "categorical_onehot": ["cat_feature"],    # categorical cols to one-hot
-        "numeric_passthrough": [],                # numeric cols to pass through unchanged
+        "quantile_bin": [],
+        "categorical_onehot": ["Sex", "Embarked"],
+        "numeric_passthrough": ["Pclass", "Age", "SibSp", "Parch", "Fare"],
         "n_bins": 3,
     },
 }
@@ -79,21 +82,60 @@ def main():
             "This is scaffolding configuration matched to the dummy CSV."
         )  # TODO: replace with logging later
 
-    # TODO_STUDENT:
-    # - Flip is_example_config to False once you've mapped SETTINGS to your real dataset.
-    # - Consider moving SETTINGS to a config.yml and loading it, once the pipeline is stable.
-
     # ------------------------------------------------------------
     # 2) Load raw data (creates dummy CSV if missing)
     # ------------------------------------------------------------
     raw_path = Path(SETTINGS["paths"]["raw_data"])
-    
+    example_path = Path("data/raw/example.csv")
+
+    # Test/scaffolding fallback:
+    # If the configured raw path doesn't exist but example.csv does, use example.csv.
+    if (not raw_path.exists()) and example_path.exists():
+        raw_path = example_path
+        SETTINGS["is_example_config"] = True
+
+    # If example mode is on explicitly, also force example path
+    if SETTINGS.get("is_example_config", False):
+        raw_path = example_path
+
     # load_data expects a config dict
     data_config = {
         "data": {"raw_path": str(raw_path)},
-        "logging": {"log_file": "reports/run.log", "level": "INFO"}
+        "logging": {"log_file": "reports/run.log", "level": "INFO"},
     }
+    
     df_raw = load_data(data_config)
+
+    # ------------------------------------------------------------
+    # 2b) If we're running in scaffolding mode, switch schema to match example.csv
+    #     (Tests create data/raw/example.csv with columns: num_feature, cat_feature, target)
+    # ------------------------------------------------------------
+    if SETTINGS.get("is_example_config", False) or (raw_path.name == "example.csv"):
+        SETTINGS["is_example_config"] = True
+        SETTINGS["target_column"] = "target"
+        SETTINGS["features"] = {
+            "quantile_bin": ["num_feature"],
+            "categorical_onehot": ["cat_feature"],
+            "numeric_passthrough": [],
+            "n_bins": 3,
+        }
+
+        # Override artifact paths for scaffold/tests
+        SETTINGS["paths"]["processed_clean"] = "data/processed/clean.csv"
+        SETTINGS["paths"]["predictions_report"] = "reports/predictions.csv"
+        SETTINGS["paths"]["model"] = "models/model.joblib"
+
+        # Infer regression vs classification
+        y_tmp = df_raw[SETTINGS["target_column"]]
+        unique_vals = set(pd.Series(y_tmp).dropna().unique().tolist())
+        if unique_vals.issubset({0, 1}) and len(unique_vals) <= 2:
+            SETTINGS["problem_type"] = "classification"
+        else:
+            SETTINGS["problem_type"] = "regression"
+
+    # TODO_STUDENT:
+    # - Flip is_example_config to False once you've mapped SETTINGS to your real dataset.
+    # - Consider moving SETTINGS to a config.yml and loading it, once the pipeline is stable.
 
     # ------------------------------------------------------------
     # 3) Clean

@@ -25,18 +25,25 @@ def read_config(path: str = "config.yaml") -> dict:
     - path: Path to a YAML config file (default: config.yaml).
     Outputs:
     - A dictionary containing configuration settings.
-    Why this contract matters for reliable ML delivery:
-    - Central configuration reduces hidden notebook constants and makes runs reproducible.
     """
-    print(f"[utils.read_config] Reading config from: {path}")  # TODO: replace with logging later
+    print(f"[utils.read_config] Reading config from: {path}")
 
-    # TODO_STUDENT:
-    # - Add config schema validation later (keep this loader simple for now).
     p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Missing config file: {p}")
-    with p.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+
+    # 1) Try relative to current working directory (normal CLI usage)
+    if p.exists():
+        with p.open("r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    # 2) Fallback: try relative to repo root (works when pytest runs in tmp dirs)
+    repo_root = Path(__file__).resolve().parents[1]  # src/utils.py → repo root
+    p2 = repo_root / path
+
+    if p2.exists():
+        with p2.open("r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+
+    raise FileNotFoundError(f"Missing config file: {p} (also tried {p2})")
 
 
 def setup_logger(log_file: str, level: str = "INFO") -> logging.Logger:
