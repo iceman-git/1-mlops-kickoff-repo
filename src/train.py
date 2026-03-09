@@ -56,6 +56,10 @@ def _select_model(config: Dict) -> Any:
             n_estimators=200,
             random_state=random_state,
         )
+        
+    if model_name == "linear_regression":
+        from sklearn.linear_model import LinearRegression
+        return LinearRegression()
 
     raise ValueError(f"Unsupported model_name: {model_name}")
 

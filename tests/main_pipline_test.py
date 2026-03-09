@@ -28,7 +28,19 @@ def test_pipeline_end_to_end_regression(tmp_path, monkeypatch):
     # Run the pipeline in an isolated working directory so it writes artifacts under tmp_path/
     monkeypatch.chdir(tmp_path)
 
-    # Import inside the test so it uses the current working directory for relative paths.
+    # Prepare a tiny regression dataset at the expected raw path so the run is deterministic.
+    raw_path = Path("data/raw/example.csv")
+    raw_path.parent.mkdir(parents=True, exist_ok=True)
+
+    df_reg = pd.DataFrame(
+        {
+            "num_feature": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            "cat_feature": ["A", "B", "A", "B", "C", "C"],
+            "target": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],  # continuous labels
+        }
+    )
+    df_reg.to_csv(raw_path, index=False)
+
     import src.main as main_mod
 
     # TODO_STUDENT:
