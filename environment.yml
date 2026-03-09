@@ -9,6 +9,7 @@ dependencies:
   - pandas
   - numpy
   - scikit-learn
+  - matplotlib
   - joblib
   - jupyter
   - ipykernel

@@ -293,7 +293,7 @@ def main():
     df_preds = run_inference(model, X_infer=X_infer)
 
     preds_path = Path(SETTINGS["paths"]["predictions_report"])
-    save_csv(df_preds, preds_path)
+    save_csv(df_preds[["prediction"]], preds_path)
 
     print("[main.main] Pipeline completed successfully.")  # TODO: replace with logging later
     print(">>> TEST MARKER: main() executed")
