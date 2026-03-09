@@ -3,6 +3,8 @@ import pytest
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
 
 from src.evaluate import evaluate_model
 
@@ -50,3 +52,19 @@ def test_evaluate_model_raises_on_shape_mismatch():
 
     with pytest.raises(ValueError):
         evaluate_model(model, X, y, {"problem_type": "classification"})
+
+
+def test_evaluate_model_regression_returns_rmse():
+    X = pd.DataFrame({"x1": [1, 2, 3, 4], "x2": [10, 20, 30, 40]})
+    y = pd.Series([10.0, 20.0, 30.0, 40.0])
+
+    model = Pipeline([("model", LinearRegression())])
+    model.fit(X, y)
+
+    metrics = evaluate_model(model, X, y, {"problem_type": "regression", "save_reports": False})
+
+    assert isinstance(metrics, dict)
+    assert "rmse" in metrics
+    assert metrics["rmse"] >= 0.0
+
+    
