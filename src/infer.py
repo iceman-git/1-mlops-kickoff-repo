@@ -65,27 +65,28 @@ def run_inference(model, X_infer: pd.DataFrame) -> pd.DataFrame:
     # START STUDENT CODE
     # --------------------------------------------------------
 
-    # 1. Survival probability — how confident is the model that the passenger survived?
-    #    predict_proba returns [[prob_class_0, prob_class_1], ...]; we take column 1.
-    proba = model.predict_proba(X_infer)[:, 1]
-    predictions_df["survival_probability"] = proba
-    print(f"[infer] Mean survival probability: {proba.mean():.2%}")  # TODO: replace with logging later
+    if hasattr(model, "predict_proba"):
+        # 1. Survival probability — how confident is the model that the passenger survived?
+        #    predict_proba returns [[prob_class_0, prob_class_1], ...]; we take column 1.
+        proba = model.predict_proba(X_infer)[:, 1]
+        predictions_df["survival_probability"] = proba
+        print(f"[infer] Mean survival probability: {proba.mean():.2%}")  # TODO: replace with logging later
 
-    # 2. Human-readable outcome label — makes the predictions CSV self-explanatory
-    #    to non-technical stakeholders without needing a data dictionary.
-    predictions_df["outcome"] = predictions_df["prediction"].map(
-        {0: "Did not survive", 1: "Survived"}
-    )
+        # 2. Human-readable outcome label — makes the predictions CSV self-explanatory
+        #    to non-technical stakeholders without needing a data dictionary.
+        predictions_df["outcome"] = predictions_df["prediction"].map(
+            {0: "Did not survive", 1: "Survived"}
+        )
 
-    # 3. High-confidence flag — True when the model is sure either way (>= 0.7 or <= 0.3).
-    #    Low-confidence predictions (0.3–0.7) could be flagged for human review
-    #    in a production system.
-    predictions_df["high_confidence"] = (
-        (predictions_df["survival_probability"] >= 0.7) |
-        (predictions_df["survival_probability"] <= 0.3)
-    )
-    high_conf_pct = predictions_df["high_confidence"].mean()
-    print(f"[infer] High-confidence predictions: {high_conf_pct:.2%}")  # TODO: replace with logging later
+        # 3. High-confidence flag — True when the model is sure either way (>= 0.7 or <= 0.3).
+        #    Low-confidence predictions (0.3–0.7) could be flagged for human review
+        #    in a production system.
+        predictions_df["high_confidence"] = (
+            (predictions_df["survival_probability"] >= 0.7) |
+            (predictions_df["survival_probability"] <= 0.3)
+        )
+        high_conf_pct = predictions_df["high_confidence"].mean()
+        print(f"[infer] High-confidence predictions: {high_conf_pct:.2%}")  # TODO: replace with logging later
 
     # --------------------------------------------------------
     # END STUDENT CODE
