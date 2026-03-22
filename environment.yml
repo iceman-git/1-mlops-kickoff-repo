@@ -1,4 +1,4 @@
-name: test_env
+name: mlops
 
 channels:
   - conda-forge
@@ -15,5 +15,11 @@ dependencies:
   - ipykernel
   - pytest
   - pytest-cov
-  - pip
+  - pyyaml
   - python-dotenv
+  - pip
+  - pip:
+    - wandb
+    - fastapi
+    - uvicorn[standard]
+    - pydantic
