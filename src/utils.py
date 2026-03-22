@@ -6,14 +6,17 @@ Responsibility: Read configs, handle CSV/model persistence.
 Pipeline contract: Stable file I/O functions used across the pipeline.
 """
 
+# ── Standard library ──────────────────────────────────────────────────────────
 import logging
+import os
 from pathlib import Path
-from typing import Optional
 
+# ── Third-party ───────────────────────────────────────────────────────────────
 import joblib
 import pandas as pd
 import yaml
 
+# ── Local ─────────────────────────────────────────────────────────────────────
 from src.logger import setup_logger  # noqa: F401 — re-exported for backward compatibility
 
 logger = logging.getLogger("mlops")
@@ -86,5 +89,50 @@ def load_model(filepath: Path):
     Outputs:
     - The loaded model object.
     """
-    logger.info("Loading model from: %s", filepath)
+    logger.info("Loading model from local path: %s", filepath)
     return joblib.load(filepath)
+
+
+def load_model_for_serving(config: dict):
+    """
+    Load the model for serving based on the MODEL_SOURCE environment variable.
+
+    - MODEL_SOURCE=wandb  → download the artifact aliased 'prod' from W&B registry
+    - MODEL_SOURCE=local  → load from the local path defined in config.yaml
+
+    This function is the single handoff point between training and serving,
+    ensuring inference always uses a managed, traceable model artifact.
+
+    Inputs:
+    - config: Full config dict loaded from config.yaml.
+    Outputs:
+    - Loaded model object (sklearn Pipeline).
+    """
+    import wandb
+
+    model_source = os.environ.get("MODEL_SOURCE", "local")
+
+    if model_source == "wandb":
+        entity = os.environ.get("WANDB_ENTITY")
+        project = config["wandb"]["project"]
+        artifact_name = config["wandb"]["artifact_name"]
+        alias = os.environ.get("WANDB_MODEL_ALIAS", config["wandb"]["artifact_alias"])
+
+        logger.info(
+            "Loading model from W&B registry: %s/%s/%s:%s",
+            entity, project, artifact_name, alias,
+        )
+
+        api = wandb.Api()
+        artifact = api.artifact(f"{entity}/{project}/{artifact_name}:{alias}")
+        artifact_dir = artifact.download()
+
+        model_filename = Path(config["artifacts"]["model_path"]).name
+        model_path = Path(artifact_dir) / model_filename
+
+        return joblib.load(model_path)
+
+    else:
+        local_path = Path(config["artifacts"]["model_path"])
+        logger.info("Loading model from local path: %s", local_path)
+        return joblib.load(local_path)
