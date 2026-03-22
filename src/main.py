@@ -29,7 +29,7 @@ from src.features import get_feature_preprocessor
 from src.infer import run_inference
 from src.load_data import load_data
 from src.train import train_model
-from src.utils import read_config, save_csv, save_model, setup_logger
+from src.utils import read_config, save_csv, save_model, setup_logger, load_model_for_serving
 from src.validate import validate_dataframe
 
 # ── Load config once at module level ─────────────────────────────────────────
@@ -40,7 +40,7 @@ def main():
     """
     Orchestrates the full end-to-end pipeline:
       load → clean → validate → split → feature build → train → evaluate
-      → save model → batch inference → save predictions
+      → save model → log to W&B → load from registry → batch inference → save predictions
     """
     # ── Load secrets from .env ────────────────────────────────────────────────
     load_dotenv()
@@ -91,7 +91,6 @@ def main():
     df_raw = load_data(data_config)
 
     # ── 4) Resolve active schema and paths ────────────────────────────────────
-    # In example/scaffold mode the column names and paths differ from production.
     if example_mode or raw_path.name == "example.csv":
         example_mode = True
         target_column = "target"
@@ -220,7 +219,7 @@ def main():
     else:
         logger.info("[main] Test weighted F1: %.4f", metric_value)
 
-    # ── 14) Log metrics and model artifact to W&B ─────────────────────────────
+    # ── 14) Log metrics and model artifact to W&B, promote with prod alias ────
     if run is not None:
         wandb.log(metrics)
         logger.info("[main] Metrics logged to W&B: %s", metrics)
@@ -230,13 +229,21 @@ def main():
             type=CONFIG["wandb"]["artifact_type"],
         )
         artifact.add_file(str(model_path))
-        run.log_artifact(artifact)
-        logger.info("[main] Model artifact logged to W&B: %s", CONFIG["wandb"]["artifact_name"])
+        run.log_artifact(artifact, aliases=["prod"])  # ← promotes artifact to 'prod'
+        logger.info(
+            "[main] Model artifact logged to W&B and promoted with alias 'prod': %s",
+            CONFIG["wandb"]["artifact_name"],
+        )
 
         wandb.finish()
         logger.info("[main] W&B run finished.")
 
-    # ── 15) Batch inference and save predictions report ───────────────────────
+    # ── 15) Load model for serving (from W&B registry or local fallback) ──────
+    if not example_mode:
+        model = load_model_for_serving(CONFIG)
+        logger.info("[main] Model loaded for serving via MODEL_SOURCE=%s", os.environ.get("MODEL_SOURCE", "local"))
+
+    # ── 16) Batch inference and save predictions report ───────────────────────
     logger.info("[main] Running inference on example rows and saving report.")
     top_n = CONFIG["inference"].get("top_n", 5)
     X_infer = X_test.head(top_n).copy()
