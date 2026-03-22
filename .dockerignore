@@ -42,5 +42,3 @@ venv/
 .git/
 .gitignore
 
-# Models directory (model is pulled from W&B at runtime, or mounted separately)
-models/

@@ -73,7 +73,6 @@ def get_feature_preprocessor(
         n_bins=n_bins,
         encode="onehot-dense",
         strategy="quantile",
-        quantile_method="linear",
     )
 
     try:
