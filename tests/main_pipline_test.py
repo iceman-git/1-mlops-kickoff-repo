@@ -69,13 +69,10 @@ def test_pipeline_end_to_end_classification(tmp_path, monkeypatch):
     Outputs:
     - None (asserts pipeline runs for classification too).
     Why this contract matters for reliable ML delivery:
-    - Ensures the same scaffolding supports both regression and classification paths without refactors breaking one mode.
+    - Ensures the pipeline supports classification without manual config overrides.
     """
-    print("[tests] Running end-to-end classification pipeline test in isolated temp directory.")  # TODO: replace with logging later
-
     monkeypatch.chdir(tmp_path)
 
-    # Prepare a tiny classification dataset at the expected raw path so the run is deterministic.
     raw_path = Path("data/raw/example.csv")
     raw_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -83,26 +80,14 @@ def test_pipeline_end_to_end_classification(tmp_path, monkeypatch):
         {
             "num_feature": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
             "cat_feature": ["A", "B", "A", "B", "C", "C"],
-            "target": [0, 1, 0, 1, 0, 1],  # binary labels
+            "target": [0, 1, 0, 1, 0, 1],  # binary labels — auto-detected as classification
         }
     )
     df_cls.to_csv(raw_path, index=False)
 
     import src.main as main_mod
 
-    # Temporarily switch SETTINGS to classification, then restore afterwards.
-    original_settings = {k: v for k, v in main_mod.SETTINGS.items()}
-    try:
-        main_mod.SETTINGS["problem_type"] = "classification"
-        main_mod.SETTINGS["is_example_config"] = True  # keep example mode on for scaffolding
-
-        # TODO_STUDENT:
-        # - Consider adding multi-class labels here once your real use case requires it.
-        main_mod.main()
-    finally:
-        # Restore SETTINGS to avoid cross-test contamination.
-        main_mod.SETTINGS.clear()
-        main_mod.SETTINGS.update(original_settings)
+    main_mod.main()
 
     preds_path = Path("reports/predictions.csv")
     assert preds_path.exists(), "Expected artifact missing: reports/predictions.csv"

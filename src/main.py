@@ -104,7 +104,14 @@ def main():
         processed_path = Path("data/processed/clean.csv")
         model_path = Path("models/model.joblib")
         predictions_path = Path("reports/predictions.csv")
-        problem_type = "classification"
+
+        # Auto-detect regression vs classification from target values
+        y_tmp = df_raw["target"]
+        unique_vals = set(pd.Series(y_tmp).dropna().unique().tolist())
+        if unique_vals.issubset({0, 1}) and len(unique_vals) <= 2:
+            problem_type = "classification"
+        else:
+            problem_type = "regression"
     else:
         target_column = CONFIG["schema"]["target"]
         features_cfg = CONFIG["features"]
@@ -214,10 +221,11 @@ def main():
     metrics = evaluate_model(model=model, X=X_test, y=y_test, config=eval_config)
     metric_value = metrics.get(eval_config["primary_metric"])
 
-    if problem_type == "regression":
-        logger.info("[main] Test RMSE: %.4f", metric_value)
+    if metric_value is not None:
+        label = "RMSE" if problem_type == "regression" else "weighted F1"
+        logger.info("[main] Test %s: %.4f", label, metric_value)
     else:
-        logger.info("[main] Test weighted F1: %.4f", metric_value)
+        logger.info("[main] Metric '%s' not found in results: %s", eval_config["primary_metric"], metrics)
 
     # ── 14) Log metrics and model artifact to W&B, promote with prod alias ────
     if run is not None:
