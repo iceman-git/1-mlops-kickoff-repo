@@ -1,0 +1,44 @@
+# =============================================================================
+# .dockerignore — Keep the Docker serving image lean.
+# Only src/, config.yaml, environment files, and the model go into the image.
+# =============================================================================
+
+# Development and testing
+tests/
+notebooks/
+.github/
+
+# Data and outputs (not needed at serve time)
+data/
+reports/
+logs/
+
+# W&B run artifacts
+wandb/
+artifacts/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Environment and secrets
+.env
+.env.example
+.venv/
+env/
+venv/
+
+# Editor and OS noise
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
