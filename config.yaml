@@ -10,7 +10,7 @@
 
 # ── File paths ────────────────────────────────────────────────────────────────
 data:
-  raw_path: "data/raw/opioid_raw_data.csv"
+  raw_path: "data/raw/titanic.csv"
   processed_path: "data/processed/clean.csv"
   inference_path: "data/inference/opioid_infer_01.csv"
   file_type: "csv"
