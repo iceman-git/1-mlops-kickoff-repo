@@ -1,10 +1,24 @@
+# =============================================================================
+# config.yaml — Single source of truth for all non-secret runtime settings.
+#
+# Rules:
+#   - All non-secret runtime settings live here.
+#   - Secrets (WANDB_API_KEY, WANDB_ENTITY, MODEL_SOURCE, WANDB_MODEL_ALIAS)
+#     live in .env only and are NEVER committed.
+#   - Code-level constants (endpoint strings, log format) may stay in code.
+# =============================================================================
+
+# ── File paths ────────────────────────────────────────────────────────────────
 data:
-  raw_path: "data/raw/titanic.csv"
-  processed_path: "data/processed/titanic_clean.csv"
+  raw_path: "data/raw/opioid_raw_data.csv"
+  processed_path: "data/processed/clean.csv"
+  inference_path: "data/inference/opioid_infer_01.csv"
   file_type: "csv"
 
+# ── Schema / problem definition ───────────────────────────────────────────────
 schema:
-  target: "Survived"
+  target: "Survived"         # TODO: update to opioid dataset target column
+  id_column: "PassengerId"   # TODO: update to opioid dataset id column
   required_columns:
     - PassengerId
     - Survived
@@ -19,6 +33,61 @@ schema:
     - Cabin
     - Embarked
 
+# ── Train / test split ────────────────────────────────────────────────────────
+split:
+  test_size: 0.25
+  random_state: 42
+  stratify: true
+
+# ── Training ──────────────────────────────────────────────────────────────────
+training:
+  problem_type: "classification"
+  model_name: "logistic_regression"
+  random_state: 42
+  calibration: false        # set to true to wrap model in CalibratedClassifierCV
+
+# ── Feature engineering ───────────────────────────────────────────────────────
+features:
+  quantile_bin: []          # numeric columns to discretize into quantile bins
+  binary_sum_cols: []       # columns to sum into a single binary indicator
+  categorical_onehot:
+    - "Sex"
+    - "Embarked"
+  numeric_passthrough:
+    - "Pclass"
+    - "Age"
+    - "SibSp"
+    - "Parch"
+    - "Fare"
+  n_bins: 3
+
+# ── Validation rules ──────────────────────────────────────────────────────────
+validation:
+  non_negative_cols: []     # columns whose values must be >= 0
+
+# ── Evaluation ────────────────────────────────────────────────────────────────
+evaluation:
+  primary_metric: "f1"
+  save_reports: false
+  report_path: "reports/metrics.json"
+
+# ── Inference ─────────────────────────────────────────────────────────────────
+inference:
+  predictions_output: "reports/predictions.csv"
+  top_n: 5                  # number of example rows to run through batch inference
+
+# ── Model artifact (local fallback path) ──────────────────────────────────────
+artifacts:
+  model_path: "models/model.joblib"
+
+# ── Logging ───────────────────────────────────────────────────────────────────
 logging:
   level: "INFO"
-  log_file: "reports/pipeline.log"
+  log_file: "logs/pipeline.log"
+
+# ── Weights & Biases ──────────────────────────────────────────────────────────
+wandb:
+  project: "opioid-classification"
+  artifact_name: "opioid_classification_model"
+  artifact_type: "model"
+  artifact_alias: "prod"
