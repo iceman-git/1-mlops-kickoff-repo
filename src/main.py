@@ -104,7 +104,14 @@ def main():
         processed_path = Path("data/processed/clean.csv")
         model_path = Path("models/model.joblib")
         predictions_path = Path("reports/predictions.csv")
-        problem_type = "classification"
+
+        # Auto-detect regression vs classification from target values
+        y_tmp = df_raw["target"]
+        unique_vals = set(pd.Series(y_tmp).dropna().unique().tolist())
+        if unique_vals.issubset({0, 1}) and len(unique_vals) <= 2:
+            problem_type = "classification"
+        else:
+            problem_type = "regression"
     else:
         target_column = CONFIG["schema"]["target"]
         features_cfg = CONFIG["features"]
