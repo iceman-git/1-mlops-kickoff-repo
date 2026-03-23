@@ -12,13 +12,13 @@
 data:
   raw_path: "data/raw/titanic.csv"
   processed_path: "data/processed/clean.csv"
-  inference_path: "data/inference/opioid_infer_01.csv"
+  inference_path: "data/inference/titanic_infer.csv"
   file_type: "csv"
 
 # ── Schema / problem definition ───────────────────────────────────────────────
 schema:
-  target: "Survived"         # TODO: update to opioid dataset target column
-  id_column: "PassengerId"   # TODO: update to opioid dataset id column
+  target: "Survived"
+  id_column: "PassengerId"
   required_columns:
     - PassengerId
     - Survived
@@ -87,7 +87,7 @@ logging:
 
 # ── Weights & Biases ──────────────────────────────────────────────────────────
 wandb:
-  project: "opioid-classification"
-  artifact_name: "opioid_classification_model"
+  project: "titanic-survival-prediction"
+  artifact_name: "titanic_survival_model"
   artifact_type: "model"
   artifact_alias: "prod"
