@@ -6,18 +6,18 @@ Responsibility: Read configs, handle CSV/model persistence.
 Pipeline contract: Stable file I/O functions used across the pipeline.
 """
 
-# ── Standard library ──────────────────────────────────────────────────────────
+# Standard library 
 import logging
 import os
 from pathlib import Path
 
-# ── Third-party ───────────────────────────────────────────────────────────────
+# Third-party 
 import joblib
 import pandas as pd
 import yaml
 
-# ── Local ─────────────────────────────────────────────────────────────────────
-from src.logger import setup_logger  # noqa: F401 — re-exported for backward compatibility
+# Local 
+from src.logger import setup_logger  
 
 logger = logging.getLogger("mlops")
 
