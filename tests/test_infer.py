@@ -23,9 +23,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from src.infer import run_inference
 
 
-# =============================================================================
+
 # SHARED FIXTURES
-# =============================================================================
 
 @pytest.fixture
 def sample_X_infer():
@@ -74,9 +73,8 @@ def fitted_model(sample_X_infer):
     return pipeline
 
 
-# =============================================================================
+
 # TESTS
-# =============================================================================
 
 def test_output_is_dataframe(fitted_model, sample_X_infer):
     """

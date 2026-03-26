@@ -11,22 +11,22 @@ Contract:
   - Pydantic enforces the full JSON request contract at the API boundary.
 """
 
-# ── Standard library ──────────────────────────────────────────────────────────
+# Standard library 
 import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
-# ── Third-party ───────────────────────────────────────────────────────────────
+# Third-party 
 import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-# ── Local ─────────────────────────────────────────────────────────────────────
+# Local
 from src.infer import run_inference
 from src.utils import load_model_for_serving, read_config, setup_logger
 
-# ── Bootstrap ─────────────────────────────────────────────────────────────────
+# Bootstrap
 load_dotenv()
 CONFIG = read_config("config.yaml")
 logger = logging.getLogger("mlops")
@@ -55,7 +55,7 @@ app = FastAPI(
 )
 
 
-# ── Request / Response schemas (Pydantic enforces the data contract) ──────────
+# Request / Response schemas (Pydantic enforces the data contract)
 
 class PredictRequest(BaseModel):
     """
@@ -80,7 +80,7 @@ class PredictResponse(BaseModel):
     high_confidence: Optional[bool] = None
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# Endpoints
 
 @app.get("/health", status_code=200)
 def health():

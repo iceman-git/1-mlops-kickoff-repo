@@ -1,7 +1,5 @@
-# =============================================================================
 # .dockerignore — Keep the Docker serving image lean.
 # Only src/, config.yaml, environment files, and the model go into the image.
-# =============================================================================
 
 # Development and testing
 tests/
