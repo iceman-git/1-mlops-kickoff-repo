@@ -10,19 +10,19 @@ All non-secret runtime settings come from config.yaml.
 Secrets (WANDB_API_KEY, WANDB_ENTITY, etc.) come from .env only.
 """
 
-# ── Standard library ──────────────────────────────────────────────────────────
+# Standard library 
 import logging
 import os
 from pathlib import Path
 
-# ── Third-party ───────────────────────────────────────────────────────────────
+# Third-party
 import wandb
 from dotenv import load_dotenv
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from sklearn.model_selection import train_test_split
 
-# ── Local ─────────────────────────────────────────────────────────────────────
+# Local
 from src.clean_data import clean_data
 from src.evaluate import evaluate_model
 from src.features import get_feature_preprocessor
@@ -32,7 +32,7 @@ from src.train import train_model
 from src.utils import read_config, save_csv, save_model, setup_logger, load_model_for_serving
 from src.validate import validate_dataframe
 
-# ── Load config once at module level ─────────────────────────────────────────
+# Load config once at module level 
 CONFIG = read_config("config.yaml")
 
 
@@ -42,18 +42,18 @@ def main():
       load → clean → validate → split → feature build → train → evaluate
       → save model → log to W&B → load from registry → batch inference → save predictions
     """
-    # ── Load secrets from .env ────────────────────────────────────────────────
+    # Load secrets from .env 
     load_dotenv()
 
     logger = setup_logger(CONFIG["logging"]["log_file"], CONFIG["logging"]["level"])
     logger.info("[main] Starting end-to-end pipeline.")
 
-    # ── 0) Ensure artifact directories exist ──────────────────────────────────
+    # 1: Ensure artifact directories exist
     logger.info("[main] Ensuring artifact directories exist.")
     for directory in ["data/raw", "data/processed", "models", "reports", "logs"]:
         Path(directory).mkdir(parents=True, exist_ok=True)
 
-    # ── 1) Resolve raw data path (scaffolding fallback for tests) ─────────────
+    # 2: Resolve raw data path (scaffolding fallback for tests) 
     raw_path = Path(CONFIG["data"]["raw_path"])
     example_path = Path("data/raw/example.csv")
     example_mode = False
@@ -66,7 +66,7 @@ def main():
             "Falling back to example.csv scaffold (test/scaffolding mode)."
         )
 
-    # ── 2) Initialize W&B run (skipped in scaffold/test mode) ─────────────────
+    # 3: Initialize W&B run (skipped in scaffold/test mode)
     run = None
     if not example_mode:
         run = wandb.init(
@@ -83,14 +83,14 @@ def main():
         )
         logger.info("[main] W&B run initialized: %s", run.name)
 
-    # ── 3) Load raw data ──────────────────────────────────────────────────────
+    # 4: Load raw data
     data_config = {
         "data": {"raw_path": str(raw_path)},
         "logging": CONFIG["logging"],
     }
     df_raw = load_data(data_config)
 
-    # ── 4) Resolve active schema and paths ────────────────────────────────────
+    # 5: Resolve active schema and paths 
     if example_mode or raw_path.name == "example.csv":
         example_mode = True
         target_column = "target"
@@ -120,7 +120,7 @@ def main():
         predictions_path = Path(CONFIG["inference"]["predictions_output"])
         problem_type = CONFIG["training"]["problem_type"]
 
-    # ── 5) Clean ──────────────────────────────────────────────────────────────
+    # 6: Clean 
     required_cols = (
         features_cfg["quantile_bin"]
         + features_cfg.get("categorical_onehot", [])
@@ -136,13 +136,13 @@ def main():
     }
     df_clean = clean_data(df_raw, clean_config)
 
-    # ── 6) Save processed clean CSV ───────────────────────────────────────────
+    # 7: Save processed clean CSV 
     save_csv(df_clean, processed_path)
 
-    # ── 7) Validate ───────────────────────────────────────────────────────────
+    # 8: Validate 
     validate_dataframe(df_clean, required_columns=required_cols)
 
-    # ── 8) Train-test split (BEFORE feature fitting to prevent leakage) ───────
+    # 9: Train-test split (BEFORE feature fitting to prevent leakage) 
     logger.info("[main] Creating train-test split (before feature fitting).")
     X = df_clean.drop(columns=[target_column])
     y = df_clean[target_column]
@@ -168,7 +168,7 @@ def main():
             stratify=None,
         )
 
-    # ── 9) Fail-fast feature checks ───────────────────────────────────────────
+    # 10: Fail-fast feature checks 
     logger.info("[main] Running fail-fast feature configuration checks.")
     quantile_bin_cols = features_cfg["quantile_bin"]
     categorical_onehot_cols = features_cfg.get("categorical_onehot", [])
@@ -186,7 +186,7 @@ def main():
             f"Non-numeric columns configured for quantile_bin: {non_numeric_bin}"
         )
 
-    # ── 10) Build feature preprocessor ────────────────────────────────────────
+    # 11: Build feature preprocessor 
     logger.info("[main] Building preprocessing recipe.")
     preprocessor = get_feature_preprocessor(
         quantile_bin_cols=quantile_bin_cols,
@@ -195,7 +195,7 @@ def main():
         n_bins=int(features_cfg["n_bins"]),
     )
 
-    # ── 11) Train model pipeline ──────────────────────────────────────────────
+    # 12: Train model pipeline 
     train_config = {
         "model_name": CONFIG["training"]["model_name"],
         "random_state": CONFIG["training"]["random_state"],
@@ -208,10 +208,10 @@ def main():
         config=train_config,
     )
 
-    # ── 12) Save model artifact locally ───────────────────────────────────────
+    # 13: Save model artifact locally 
     save_model(model, model_path)
 
-    # ── 13) Evaluate on held-out test set ─────────────────────────────────────
+    # 14: Evaluate on held-out test set 
     eval_config = {
         "problem_type": problem_type,
         "primary_metric": CONFIG["evaluation"]["primary_metric"],
@@ -227,7 +227,7 @@ def main():
     else:
         logger.info("[main] Metric '%s' not found in results: %s", eval_config["primary_metric"], metrics)
 
-    # ── 14) Log metrics and model artifact to W&B, promote with prod alias ────
+    # 15: Log metrics and model artifact to W&B, promote with prod alias 
     if run is not None:
         wandb.log(metrics)
         logger.info("[main] Metrics logged to W&B: %s", metrics)
@@ -246,12 +246,12 @@ def main():
         wandb.finish()
         logger.info("[main] W&B run finished.")
 
-    # ── 15) Load model for serving (from W&B registry or local fallback) ──────
+    # 16: Load model for serving (from W&B registry or local fallback) 
     if not example_mode:
         model = load_model_for_serving(CONFIG)
         logger.info("[main] Model loaded for serving via MODEL_SOURCE=%s", os.environ.get("MODEL_SOURCE", "local"))
 
-    # ── 16) Batch inference and save predictions report ───────────────────────
+    # 17: Batch inference and save predictions report 
     logger.info("[main] Running inference on example rows and saving report.")
     top_n = CONFIG["inference"].get("top_n", 5)
     X_infer = X_test.head(top_n).copy()
