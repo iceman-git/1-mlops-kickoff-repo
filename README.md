@@ -1,46 +1,46 @@
-# Titanic Survival Prediction
+# Titanic Survival Prediction — MLOps Pipeline
 
 **Authors:** Dalton Kern, Max Tiefenbacher, Issam El Hoss, Jaime Moncayo, Maria Cruz
-**Course:** Machine Learning Ops: Master in Business Analytics and Data Science  
+**Course:** Machine Learning Ops: Master in Business Analytics and Data Science
 
 ---
 
 ## 1. Business Objective
 
-This project uses passenger data from the RMS Titanic disaster to build a binary survival classifier. The primary purpose of the project is for the student team to practice classification models and build a modularized ML pipeline.
+This project uses passenger data from the RMS Titanic disaster to build a binary survival classifier. The primary purpose is for the student team to practice end-to-end MLOps by transitioning a working Jupyter Notebook into a production-grade, modular pipeline with experiment tracking, containerized serving, and automated CI/CD.
 
-* **The Goal:** Predict whether a passenger survived the Titanic sinking based on their demographic profile, ticket class, and travel characteristics.
-* **The User:** Data science students learning to transition a working Jupyter Notebook into a production-oriented, modular MLOps pipeline.
-* **In Scope:** A repeatable, auditable MLOps pipeline generating binary survival classifications and operational probability scores.
-* **Out of Scope:** Real-time inference serving, causal analysis of survival factors, or policy recommendations.
+- **The Goal:** Predict whether a passenger survived the Titanic sinking based on their demographic profile, ticket class, and travel characteristics.
+- **The User:** Data science students and practitioners learning to operationalize ML models beyond the notebook.
+- **In Scope:** A repeatable, auditable MLOps pipeline with binary survival classifications, probability scores, experiment tracking via W&B, a REST API, and automated deployment.
+- **Out of Scope:** Causal analysis of survival factors or policy recommendations.
 
 ---
 
 ## 2. Success Metrics
 
-* **Business KPI:** Maximize the identification of true survivors to support accurate historical analysis and safety planning benchmarks.
-* **Technical Metric:** Weighted F1-Score on the held-out test set. We balance Precision (avoiding false alarms) and Recall (catching true survivors) across the imbalanced class distribution.
-* **Acceptance Criteria:** The pipeline must run end-to-end without errors, produce all three required artifacts, and pass 100% of the test suite before any branch is merged to `dev`.
+- **Business KPI:** Maximize the identification of true survivors to support accurate historical analysis and safety planning benchmarks.
+- **Technical Metric:** Weighted F1-Score on the held-out test set — balancing Precision (avoiding false alarms) and Recall (catching true survivors) across the imbalanced class distribution.
+- **Acceptance Criteria:** The pipeline must run end-to-end without errors, produce all required artifacts, pass 100% of the CI test suite, and be accessible via the deployed API before any branch is merged to `main`.
 
 ---
 
 ## 3. The Data
 
-### Source and unit of analysis
+### Source and Unit of Analysis
 - Classic Kaggle dataset: *Titanic: Machine Learning from Disaster*
 - Unit of analysis is an individual passenger record from the RMS Titanic manifest
-- Fallback: the `seaborn` built-in Titanic dataset is used when Kaggle credentials are unavailable
+- Fallback: a small scaffold CSV is auto-generated when the raw data file is not present (for CI/test environments)
 
-### Dataset snapshot
+### Dataset Snapshot
 - Rows: 891 (training manifest)
 - Columns: 12 raw features (including `PassengerId` and target)
 - Positive class prevalence (`Survived=1`): ~38.4% (342 of 891)
 
-### Target definition
+### Target Definition
 - `Survived`: whether the passenger survived the sinking (1 = survived, 0 = did not survive)
 
-### Data sensitivity
-- This is a fully public historical dataset containing no living individuals
+### Data Sensitivity
+- Fully public historical dataset containing no living individuals
 - No special data handling restrictions apply in an academic context
 
 ### Data Dictionary
@@ -68,26 +68,30 @@ This project uses passenger data from the RMS Titanic disaster to build a binary
 
 ---
 
-## 4. Academic Purpose & ML Approach
+## 4. ML Approach
 
-This repository is a teaching scaffold for Machine Learning Operations. We transition from a fragile Jupyter Notebook into a testable, modular software engineering architecture.
+This repository transitions a fragile Jupyter Notebook into a testable, modular MLOps architecture.
 
-* **Separation of Concerns:** Every step (Loading, Cleaning, Validating, Feature Engineering, Training, Evaluating, Inferring) has a dedicated, single-purpose Python module.
-* **Fail-Fast Security Gates:** `validate.py` blocks empty DataFrames and missing required columns before any compute begins.
-* **Leakage Prevention:** The train/test split is performed in `main.py` *before* the feature recipe is built or fitted, ensuring the `ColumnTransformer` never sees test data.
-* **Deployable Artifacts:** The orchestrator bundles preprocessing and the algorithm into a single `.joblib` Pipeline, preventing training-serving skew at inference time.
-* **Enriched Inference Output:** `infer.py` returns not just the binary prediction but also the survival probability, a human-readable outcome label, and a high-confidence flag — making predictions immediately actionable without a data dictionary.
+- **Separation of Concerns:** Every step (Loading, Cleaning, Validating, Feature Engineering, Training, Evaluating, Inferring) has a dedicated single-purpose Python module.
+- **Fail-Fast Gates:** `validate.py` blocks empty DataFrames and missing required columns before any compute begins.
+- **Leakage Prevention:** The train/test split is performed in `main.py` *before* the feature recipe is built or fitted, ensuring the `ColumnTransformer` never sees test data.
+- **Deployable Artifacts:** Preprocessing and the algorithm are bundled into a single `.joblib` Pipeline, preventing training-serving skew at inference time.
+- **Enriched Inference Output:** `infer.py` returns the binary prediction, survival probability, a human-readable outcome label, and a high-confidence flag.
 
-### ML Model
-- **Algorithm:** Logistic Regression (`LogisticRegression(max_iter=1000, random_state=42)`)
-- **Preprocessing:** `StandardScaler` on numeric features (`Age`, `Fare`, `FamilySize`); `OneHotEncoder` on categorical features (`Pclass`, `Sex`, `Embarked`, `Title`)
-- **Problem Type:** Binary classification
+### Model Card
 
-### Future Roadmap (Upcoming Sessions)
-* Move `SETTINGS` into `config.yaml`.
-* Replace `print()` statements with structured logging.
-* Add MLflow for experiment tracking and model registry.
-* Containerize and serve predictions via a FastAPI application.
+| Property | Value |
+|---|---|
+| **Algorithm** | Logistic Regression (`max_iter=1000`, `random_state=42`) |
+| **Preprocessing** | `StandardScaler` on numeric features (`Age`, `Fare`, `FamilySize`); `OneHotEncoder` on categorical features (`Pclass`, `Sex`, `Embarked`, `Title`) |
+| **Problem Type** | Binary classification |
+| **Primary Metric** | Weighted F1-Score |
+| **Training Data** | 80% of 891 Titanic passenger records |
+| **Test Data** | 20% held-out split (stratified) |
+| **Artifact** | `models/model.joblib` — sklearn Pipeline (ColumnTransformer + LogisticRegression) |
+| **Experiment Tracking** | Weights & Biases (W&B) — metrics, parameters, and model artifact logged per run |
+| **Model Registry** | W&B model registry — production model promoted with `prod` alias |
+| **Known Limitations** | Trained on a small historical dataset; not suitable for real-world safety-critical decisions |
 
 ---
 
@@ -96,88 +100,126 @@ This repository is a teaching scaffold for Machine Learning Operations. We trans
 ```text
 .
 ├── README.md
-├── environment.yml
-├── data
-│   ├── raw
+├── environment.yml          # Conda environment (mlops)
+├── config.yaml              # Central configuration hub
+├── Dockerfile               # Container definition for API serving
+├── .env.example             # Template for secrets (copy to .env)
+├── .github/
+│   └── workflows/
+│       ├── ci.yml           # CI — runs pytest on PRs to dev and main
+│       └── deploy.yml       # CD — triggers Render deploy on GitHub Release
+├── data/
+│   ├── raw/
 │   │   └── titanic.csv
-│   └── processed
+│   └── processed/
 │       └── clean.csv
-├── models
+├── models/
 │   └── model.joblib
-├── reports
+├── reports/
 │   └── predictions.csv
-├── src
+├── src/
 │   ├── __init__.py
-│   ├── clean_data.py
-│   ├── evaluate.py
-│   ├── features.py
-│   ├── infer.py
+│   ├── main.py              # Pipeline orchestrator
 │   ├── load_data.py
-│   ├── main.py
+│   ├── clean_data.py
+│   ├── validate.py
+│   ├── features.py
 │   ├── train.py
+│   ├── evaluate.py
+│   ├── infer.py
+│   ├── api.py               # FastAPI application
 │   ├── utils.py
-│   └── validate.py
-└── tests
+│   └── logger.py            # Centralised logging setup
+└── tests/
     ├── __init__.py
-    └── test_infer.py
-    └── test_clean_data.py
-    └── test_features.py
-    └── test_load_data.py
-    └── test_validate.py
+    └── main_pipline_test.py
+```
 
 ---
 
-### 6. How to Run & Test
+## 6. How to Run & Test
 
 ### Step 1: Environment Setup
-Build and activate the Conda environment:
 ```bash
 conda env create -f environment.yml
-conda activate mlops-student-env
+conda activate mlops
 ```
 
-### Step 2: Add Your Data
-Place the Titanic CSV at the following path before running the pipeline:
+### Step 2: Configure Secrets
+Copy `.env.example` to `.env` and fill in your credentials:
+```bash
+cp .env.example .env
+```
+```
+WANDB_API_KEY=your_wandb_api_key
+WANDB_ENTITY=your_wandb_username
+MODEL_SOURCE=local          # or "wandb" to load from registry
+WANDB_MODEL_ALIAS=prod
+```
+
+### Step 3: Add Your Data
+Place the Titanic CSV at:
 ```
 data/raw/titanic.csv
 ```
-> If no file is found, `load_data.py` will automatically generate a small dummy CSV at that path so the pipeline runs end-to-end. The dummy dataset is for scaffolding only — replace it with real data before meaningful training.
+> If no file is found, the pipeline automatically falls back to a small scaffold CSV so it can run end-to-end in test/CI environments.
 
-### Step 3: Configure the Pipeline
-Open `src/main.py` and update the `SETTINGS` dictionary to match your dataset. At minimum, set `is_example_config` to `False` once real data is in place:
-```python
-SETTINGS = {
-    "is_example_config": False,
-    "target_column": "Survived",
-    "problem_type": "classification",
-    ...
-}
-```
-
-### Step 4: Run the Test Suite
-Ensure all pipeline contracts are unbroken before training:
-```bash
-python -m pytest tests/ -v
-```
-> You should see 100% passing tests.
-
-### Step 5: Execute the Orchestrator
-Run the end-to-end pipeline to clean data, train the model, and generate artifacts:
+### Step 4: Run the Pipeline
 ```bash
 python -m src.main
 ```
 
+### Step 5: Run the Test Suite
+```bash
+pytest tests/ -v
+```
+
+### Step 6: Serve the API Locally
+```bash
+uvicorn src.api:app --reload
+```
+- Health check: `GET /health`
+- Predict: `POST /predict` with JSON body:
+```json
+{
+  "Pclass": 1,
+  "Sex": "female",
+  "Age": 29.0,
+  "SibSp": 0,
+  "Parch": 0,
+  "Fare": 211.3,
+  "Embarked": "S"
+}
+```
+
+### Step 7: Run with Docker
+```bash
+docker build -t mlops-api .
+docker run -p 8000:8000 --env-file .env -v $(pwd)/models:/app/models mlops-api
+```
+
 ---
 
-## 7. Outputs Generated
+## 7. CI/CD Pipeline
+
+| Trigger | Workflow | Action |
+|---|---|---|
+| PR to `dev` or `main` | `ci.yml` | Runs full pytest suite — must pass before merge |
+| GitHub Release published | `deploy.yml` | Triggers Render deploy hook to redeploy the API |
+
+Branch protection on `main` requires CI to pass before any merge.
+
+---
+
+## 8. Outputs Generated
 
 | Artifact | Path | Description |
 |---|---|---|
 | Cleaned data | `data/processed/clean.csv` | Deterministically cleaned and feature-engineered input data |
 | Trained model | `models/model.joblib` | Deployable sklearn Pipeline (preprocessor + LogisticRegression) |
-| Predictions | `reports/predictions.csv` | Inference log with prediction, survival probability, outcome label, and confidence flag |
+| Predictions | `reports/predictions.csv` | Inference log with prediction, probability, outcome label, and confidence flag |
 
-### Sample predictions output
+### Sample Predictions Output
 
 | prediction | survival_probability | outcome | high_confidence |
 |---|---|---|---|
@@ -187,21 +229,24 @@ python -m src.main
 
 ---
 
-## 8. Academic Purpose
+## 9. Changelog
 
-This repository is a teaching scaffold for Machine Learning Operations (MLOps).
+### v1.0.0 — Production Release
+- Deployed FastAPI application to Render with `/health` and `/predict` endpoints
+- Added GitHub Actions CI (`ci.yml`) running pytest on all PRs to `dev` and `main`
+- Added GitHub Actions CD (`deploy.yml`) triggering Render deploy on GitHub Release
+- Added Dockerfile for containerized API serving
+- Integrated Weights & Biases for experiment tracking, metric logging, and model registry with `prod` alias
+- Added `load_model_for_serving()` supporting both local and W&B registry model loading via `MODEL_SOURCE` env var
+- Centralised all configuration into `config.yaml` (removed `SETTINGS` dict from `main.py`)
+- Replaced all `print()` statements with structured logging via `logger.py`
+- Added `.env` / `.env.example` for secrets management via `python-dotenv`
+- Added `api.py` (FastAPI) with Pydantic request/response models and lifespan model loading
+- Expanded `environment.yml` with `wandb`, `fastapi`, `uvicorn`, `pydantic`
 
-**Learning outcomes**
-
-- Translate a notebook workflow into a `src/` layout with explicit module contracts
-- Implement quality gates before training to prevent silent failure modes
-- Enforce leakage prevention by design through split-before-fit boundaries
-- Produce model and data artifacts for auditability and reproducibility
-- Add tests that validate behaviour and output contracts, not just that code runs
-- Practice the full Git workflow: branching, committing, pushing, and opening pull requests to `dev`
-
-**Roadmap for later sessions**
-- Move `SETTINGS` into `config.yaml` and add environment-based secrets via `.env`
-- Replace `print()` statements with standard library logging and structured logs
-- Add experiment tracking, model registry, and continuous integration
-- Containerize and serve predictions via a FastAPI application
+### v0.1.0 — Initial Scaffold
+- Modular pipeline: `load_data` → `clean_data` → `validate` → `features` → `train` → `evaluate` → `infer`
+- sklearn Pipeline bundling `ColumnTransformer` + `LogisticRegression`
+- Leakage-safe train/test split before feature fitting
+- Fail-fast validation gate blocking bad data before training
+- Enriched inference output with probability, outcome label, and confidence flag
