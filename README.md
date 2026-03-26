@@ -100,26 +100,36 @@ This repository transitions a fragile Jupyter Notebook into a testable, modular 
 ```text
 .
 ├── README.md
-├── environment.yml          # Conda environment (mlops)
-├── config.yaml              # Central configuration hub
-├── Dockerfile               # Container definition for API serving
-├── .env.example             # Template for secrets (copy to .env)
+├── environment.yml               # Conda environment (mlops)
+├── conda-lock.yml                # Pinned dependency lockfile for reproducibility
+├── config.yaml                   # Central configuration hub
+├── Dockerfile                    # Container definition for API serving
+├── pytest.ini                    # Pytest configuration
+├── .env.example                  # Template for secrets (copy to .env)
+├── .gitignore
+├── .dockerignore
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml           # CI — runs pytest on PRs to dev and main
-│       └── deploy.yml       # CD — triggers Render deploy on GitHub Release
+│       ├── ci.yml                # CI — runs pytest on PRs to dev and main
+│       └── deploy.yml            # CD — triggers Render deploy on GitHub Release
+├── Notebook/
+│   ├── titanic_ntbk.ipynb        # Original exploratory notebook
+│   └── titanic_ntbk_sandbox_v2.ipynb  # Sandbox notebook reading from src/ modules
 ├── data/
 │   ├── raw/
 │   │   └── titanic.csv
-│   └── processed/
-│       └── clean.csv
+│   ├── processed/
+│   │   └── clean.csv
+│   └── inference/                # Input data for batch inference
 ├── models/
-│   └── model.joblib
+│   └── model.joblib              # Trained sklearn Pipeline artifact
 ├── reports/
-│   └── predictions.csv
+│   └── predictions.csv           # Inference output log
+├── logs/
+│   └── pipeline.log              # Local log file written by logger
 ├── src/
 │   ├── __init__.py
-│   ├── main.py              # Pipeline orchestrator
+│   ├── main.py                   # Pipeline orchestrator
 │   ├── load_data.py
 │   ├── clean_data.py
 │   ├── validate.py
@@ -127,12 +137,21 @@ This repository transitions a fragile Jupyter Notebook into a testable, modular 
 │   ├── train.py
 │   ├── evaluate.py
 │   ├── infer.py
-│   ├── api.py               # FastAPI application
+│   ├── api.py                    # FastAPI application
 │   ├── utils.py
-│   └── logger.py            # Centralised logging setup
+│   └── logger.py                 # Centralised logging setup
 └── tests/
     ├── __init__.py
-    └── main_pipline_test.py
+    ├── conftest.py
+    ├── main_pipline_test.py
+    ├── test_clean_data.py
+    ├── test_evaluate.py
+    ├── test_features.py
+    ├── test_infer.py
+    ├── test_load_data.py
+    ├── test_train.py
+    ├── test_utils.py
+    └── test_validate.py
 ```
 
 ---
